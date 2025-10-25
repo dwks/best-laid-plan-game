@@ -101,6 +101,7 @@ func create_city_buttons():
 			
 		var button = Button.new()
 		button.custom_minimum_size = Vector2(100, 50)
+		button.add_theme_font_size_override("font_size", 24)
 		
 		# Scale positions based on window size
 		var relative_x = CITY_POSITIONS[city_id].x / map_size.x
@@ -152,17 +153,19 @@ func update_info_panel(city_name: String):
 			label.text = format_city_info(city_data)
 
 func format_city_info(data: Dictionary) -> String:
-	return """City: %s
+	var info = """City: %s
 Population: %s
-AI Adoption: %d%%
 Policy: %s
-Economic Growth: %.1f%%
-Quality of Life: %.0f%%
 """ % [
 	data.name,
 	str(data.population),
-	(data.ai_adoption_rate * 100) as int,
-	data.policy_restrictions,
-	data.economic_growth,
-	(data.quality_of_life * 100)
+	data.policy_restrictions
 ]
+	
+	# Add AI companies if available
+	if data.has("ai_companies") and data.ai_companies.size() > 0:
+		info += "\nAI Companies:\n"
+		for company in data.ai_companies:
+			info += "  • %s\n" % company
+	
+	return info
