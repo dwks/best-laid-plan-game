@@ -6,6 +6,10 @@ A strategic simulation game built with Godot 4 that explores future world states
 
 This game simulates how different policy decisions regarding artificial intelligence can shape the future of cities and nations. Players can click on cities on a world map to view detailed information about their AI adoption rates, policy restrictions, economic growth, and quality of life indicators.
 
+## Credits
+
+- World Map: [Simple SVG World Map](https://github.com/flekschas/simple-world-map) by Al MacDonald (CC BY-SA 3.0)
+
 ## Features
 
 - Interactive world map with clickable cities
