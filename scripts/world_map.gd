@@ -5,12 +5,18 @@ extends Control
 @onready var world_map_image = $MapContainer/WorldMapImage
 @onready var map_background = $MapBackground
 
-# Positions relative to the actual map dimensions (784.077 x 458.627, viewBox starts at 30.767, 241.591)
+# Positions relative to the PNG map dimensions (2000 x 1171)
 const CITY_POSITIONS = {
-	"new_york": Vector2(250, 320),   # North America - approximate position
-	"london": Vector2(450, 250),     # Europe
-	"tokyo": Vector2(700, 320),      # East Asia
-	"beijing": Vector2(650, 290)     # East Asia
+	"washington_dc": Vector2(420, 420),
+	"san_francisco": Vector2(140, 440),
+	"seattle": Vector2(120, 280),
+	"new_york": Vector2(480, 430),
+	"london": Vector2(850, 350),
+	"beijing": Vector2(1600, 420),
+	"shenzhen": Vector2(1620, 540),
+	"singapore": Vector2(1540, 660),
+	"tokyo": Vector2(1700, 470),
+	"taipei": Vector2(1650, 550)
 }
 
 var city_buttons: Dictionary = {}
@@ -60,7 +66,7 @@ func _on_viewport_size_changed():
 
 func reposition_city_buttons():
 	var viewport_size = get_viewport_rect().size
-	var map_size = Vector2(784.077, 458.627)
+	var map_size = Vector2(2000.0, 1171.0)
 	
 	for city_id in city_buttons:
 		var button = city_buttons[city_id]
@@ -75,7 +81,7 @@ func reposition_city_buttons():
 func create_city_buttons():
 	# Get the viewport size to scale positions relative to window
 	var viewport_size = get_viewport_rect().size
-	var map_size = Vector2(784.077, 458.627)  # Size of the SVG map
+	var map_size = Vector2(2000.0, 1171.0)  # Size of the PNG map
 	
 	for city_id in CITY_POSITIONS.keys():
 		var city_data = GameManager.get_city_data(city_id)
