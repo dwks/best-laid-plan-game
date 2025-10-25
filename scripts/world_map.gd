@@ -46,17 +46,28 @@ func update_map_scale():
 	world_map_image.scale = Vector2(scale_x, scale_y)
 
 func load_world_map():
-	# Load the PNG image directly from file
-	var image = Image.new()
-	var error = image.load("res://map_assets/world-map-colored.png")
-	if error == OK:
-		var texture = ImageTexture.create_from_image(image)
+	# Try loading as a resource first (will use imported texture)
+	var texture = load("res://map_assets/world-map-colored.png")
+	if texture:
 		world_map_image.texture = texture
 		map_background.visible = false
-		print("World map loaded successfully")
+		print("World map loaded successfully as resource")
 		print("Texture size: ", texture.get_size())
 	else:
-		print("Warning: Could not load world map texture, error: ", error)
+		# Fallback: try loading the image directly
+		var image = Image.new()
+		var error = image.load("res://map_assets/world-map-colored.png")
+		if error == OK:
+			var tex = ImageTexture.create_from_image(image)
+			world_map_image.texture = tex
+			map_background.visible = false
+			print("World map loaded successfully from file")
+			print("Texture size: ", tex.get_size())
+		else:
+			print("Error: Could not load world map texture, error: ", error)
+			print("File path: res://map_assets/world-map-colored.png")
+			# Keep the blue background visible as fallback
+			map_background.visible = true
 
 func _on_viewport_size_changed():
 	# Reposition city buttons when window is resized
