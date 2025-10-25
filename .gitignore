@@ -1,0 +1,20 @@
+# Godot-specific ignores
+.godot/
+export.cfg
+export_presets.cfg
+
+# Imported assets (add these later as project grows)
+*.import
+
+# Builds
+builds/
+*.pck
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Temporary files
+~*
+.*.swp
+.*.swo
