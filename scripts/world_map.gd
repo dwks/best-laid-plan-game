@@ -27,7 +27,7 @@ func _ready():
 	await get_tree().process_frame
 	GameManager.city_selected.connect(_on_city_selected)
 	GameManager.year_changed.connect(_on_year_changed)
-	GameManager.month_changed.connect(_on_month_changed)
+	GameManager.time_changed.connect(_on_time_changed)
 	get_viewport().size_changed.connect(_on_viewport_size_changed)
 	load_world_map()
 	create_city_buttons()
@@ -162,7 +162,7 @@ func create_simulation_controls():
 	# Create simulation control panel
 	var control_panel = Panel.new()
 	control_panel.position = Vector2(50, 50)
-	control_panel.custom_minimum_size = Vector2(350, 180)
+	control_panel.custom_minimum_size = Vector2(500, 120)
 	control_panel.name = "SimulationControlPanel"
 	
 	var style = StyleBoxFlat.new()
@@ -174,60 +174,72 @@ func create_simulation_controls():
 	style.border_color = Color(0.4, 0.5, 0.6, 1)
 	control_panel.add_theme_stylebox_override("panel", style)
 	
-	# Year/Month display
-	var year_label = Label.new()
-	year_label.position = Vector2(10, 10)
-	year_label.text = get_month_name(GameManager.month) + " " + str(GameManager.year)
-	year_label.add_theme_font_size_override("font_size", 18)
-	control_panel.add_child(year_label)
+	# Date/Time display
+	var datetime_label = Label.new()
+	datetime_label.position = Vector2(10, 10)
+	datetime_label.text = format_datetime()
+	datetime_label.add_theme_font_size_override("font_size", 18)
+	control_panel.add_child(datetime_label)
 	
-	# Simulation speed control
+	# Speed display
 	var speed_label = Label.new()
-	speed_label.position = Vector2(10, 40)
-	speed_label.text = "Speed: 1x"
+	speed_label.position = Vector2(10, 35)
+	speed_label.text = "speed: 1mo"
 	speed_label.add_theme_font_size_override("font_size", 14)
 	control_panel.add_child(speed_label)
 	
-	# Play/Pause button
+	# Speed buttons
+	var speed_1mo_button = Button.new()
+	speed_1mo_button.position = Vector2(10, 60)
+	speed_1mo_button.custom_minimum_size = Vector2(60, 25)
+	speed_1mo_button.text = "1mo"
+	speed_1mo_button.pressed.connect(_on_speed_month)
+	control_panel.add_child(speed_1mo_button)
+	
+	var speed_1w_button = Button.new()
+	speed_1w_button.position = Vector2(80, 60)
+	speed_1w_button.custom_minimum_size = Vector2(60, 25)
+	speed_1w_button.text = "1w"
+	speed_1w_button.pressed.connect(_on_speed_week)
+	control_panel.add_child(speed_1w_button)
+	
+	var speed_1d_button = Button.new()
+	speed_1d_button.position = Vector2(150, 60)
+	speed_1d_button.custom_minimum_size = Vector2(60, 25)
+	speed_1d_button.text = "1d"
+	speed_1d_button.pressed.connect(_on_speed_day)
+	control_panel.add_child(speed_1d_button)
+	
+	var speed_1m_button = Button.new()
+	speed_1m_button.position = Vector2(220, 60)
+	speed_1m_button.custom_minimum_size = Vector2(60, 25)
+	speed_1m_button.text = "1m"
+	speed_1m_button.pressed.connect(_on_speed_minute)
+	control_panel.add_child(speed_1m_button)
+	
+	# Play/Stop button
 	var play_button = Button.new()
-	play_button.position = Vector2(10, 70)
-	play_button.custom_minimum_size = Vector2(80, 30)
+	play_button.position = Vector2(300, 60)
+	play_button.custom_minimum_size = Vector2(80, 25)
 	play_button.text = "Play"
 	play_button.pressed.connect(_on_play_pause_pressed)
 	control_panel.add_child(play_button)
 	
-	# Speed up button
-	var speed_up_button = Button.new()
-	speed_up_button.position = Vector2(100, 70)
-	speed_up_button.custom_minimum_size = Vector2(60, 30)
-	speed_up_button.text = "2x"
-	speed_up_button.pressed.connect(func(): GameManager.simulation_speed = 2.0)
-	control_panel.add_child(speed_up_button)
-	
-	# Speed down button
-	var speed_down_button = Button.new()
-	speed_down_button.position = Vector2(170, 70)
-	speed_down_button.custom_minimum_size = Vector2(60, 30)
-	speed_down_button.text = "0.5x"
-	speed_down_button.pressed.connect(func(): GameManager.simulation_speed = 0.5)
-	control_panel.add_child(speed_down_button)
-	
 	# Step button
 	var step_button = Button.new()
-	step_button.position = Vector2(240, 70)
-	step_button.custom_minimum_size = Vector2(50, 30)
+	step_button.position = Vector2(390, 60)
+	step_button.custom_minimum_size = Vector2(50, 25)
 	step_button.text = "Step"
 	step_button.pressed.connect(_on_step_pressed)
 	control_panel.add_child(step_button)
 	
-	# Leaderboard toggle button
-	var leaderboard_button = Button.new()
-	leaderboard_button.position = Vector2(10, 110)
-	leaderboard_button.custom_minimum_size = Vector2(120, 30)
-	leaderboard_button.text = "Show Rankings"
-	leaderboard_button.pressed.connect(_on_leaderboard_toggle)
-	control_panel.add_child(leaderboard_button)
-	
+	# Show/Hide Rankings button
+	var rankings_button = Button.new()
+	rankings_button.position = Vector2(450, 60)
+	rankings_button.custom_minimum_size = Vector2(120, 25)
+	rankings_button.text = "Show Rankings"
+	rankings_button.pressed.connect(_on_leaderboard_toggle)
+	control_panel.add_child(rankings_button)
 	
 	add_child(control_panel)
 	
@@ -235,13 +247,63 @@ func create_simulation_controls():
 	create_company_panel()
 
 func _on_step_pressed():
-	GameManager.advance_month()
+	GameManager.step_time()
+
+func _on_speed_month():
+	GameManager.set_time_unit("month")
+	update_speed_display()
+
+func _on_speed_week():
+	GameManager.set_time_unit("week")
+	update_speed_display()
+
+func _on_speed_day():
+	GameManager.set_time_unit("day")
+	update_speed_display()
+
+func _on_speed_minute():
+	GameManager.set_time_unit("minute")
+	update_speed_display()
+
+func update_speed_display():
+	var control_panel = get_node("SimulationControlPanel")
+	if control_panel:
+		var speed_label = control_panel.get_child(1)
+		if speed_label:
+			speed_label.text = "speed: 1" + GameManager.time_unit
+
+func format_datetime() -> String:
+	var month_name = get_month_name(GameManager.month)
+	var am_pm = "AM" if GameManager.hour < 12 else "PM"
+	var display_hour = GameManager.hour
+	if display_hour == 0:
+		display_hour = 12
+	elif display_hour > 12:
+		display_hour -= 12
+	
+	return "%s %d %d %d:%02d%s" % [
+		month_name,
+		GameManager.day,
+		GameManager.year,
+		display_hour,
+		GameManager.minute,
+		am_pm
+	]
 
 func _on_play_pause_pressed():
 	if GameManager.is_simulation_running:
 		GameManager.stop_simulation()
+		update_play_button_text()
 	else:
 		GameManager.start_simulation()
+		update_play_button_text()
+
+func update_play_button_text():
+	var control_panel = get_node("SimulationControlPanel")
+	if control_panel:
+		var play_button = control_panel.get_child(6)
+		if play_button:
+			play_button.text = "Stop" if GameManager.is_simulation_running else "Play"
 
 func _on_leaderboard_toggle():
 	company_panel_visible = !company_panel_visible
@@ -252,9 +314,9 @@ func _on_leaderboard_toggle():
 	# Update button text
 	var control_panel = get_node("SimulationControlPanel")
 	if control_panel:
-		var leaderboard_button = control_panel.get_child(6)  # 7th child (0-indexed) - leaderboard button
-		if leaderboard_button:
-			leaderboard_button.text = "Hide Rankings" if company_panel_visible else "Show Rankings"
+		var rankings_button = control_panel.get_child(8)
+		if rankings_button:
+			rankings_button.text = "Hide Rankings" if company_panel_visible else "Show Rankings"
 
 func _on_year_changed(new_year: int):
 	# Update year display
@@ -274,13 +336,21 @@ func _on_year_changed(new_year: int):
 	if GameManager.selected_city != "":
 		update_info_panel(GameManager.selected_city)
 
-func _on_month_changed(new_year: int, new_month: int):
-	# Update month display
+func _on_time_changed(year: int, month: int, day: int, hour: int, minute: int):
+	# Update datetime display
 	var control_panel = get_node("SimulationControlPanel")
 	if control_panel:
-		var year_label = control_panel.get_child(0)
-		if year_label:
-			year_label.text = get_month_name(new_month) + " " + str(new_year)
+		var datetime_label = control_panel.get_child(0)
+		if datetime_label:
+			datetime_label.text = format_datetime()
+		
+		# Update speed display
+		var speed_label = control_panel.get_child(1)
+		if speed_label:
+			speed_label.text = "speed: 1" + GameManager.time_unit
+		
+		# Update play button text
+		update_play_button_text()
 	
 	# Update city buttons with new company data
 	update_city_buttons()

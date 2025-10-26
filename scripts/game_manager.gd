@@ -3,13 +3,18 @@ extends Node
 signal city_selected(city_name: String)
 signal year_changed(year: int)
 signal month_changed(year: int, month: int)
+signal time_changed(year: int, month: int, day: int, hour: int, minute: int)
 
 var selected_city: String = ""
 var world_state: Dictionary = {}
 var year: int = 2024
 var month: int = 1  # 1-12
+var day: int = 1    # 1-31
+var hour: int = 12   # 0-23
+var minute: int = 0  # 0-59
 var companies: Dictionary = {}
 var simulation_speed: float = 1.0  # Steps per second
+var time_unit: String = "month"  # month, week, day, minute
 var is_simulation_running: bool = false
 var simulation_timer: Timer
 
@@ -225,7 +230,48 @@ func stop_simulation():
 
 func _on_simulation_tick():
 	if is_simulation_running:
+		advance_time()
+
+func advance_time():
+	match time_unit:
+		"month":
+			advance_month()
+		"week":
+			advance_week()
+		"day":
+			advance_day()
+		"minute":
+			advance_minute()
+
+func advance_minute():
+	minute += 1
+	if minute >= 60:
+		minute = 0
+		advance_hour()
+	time_changed.emit(year, month, day, hour, minute)
+
+func advance_hour():
+	hour += 1
+	if hour >= 24:
+		hour = 0
+		advance_day()
+	time_changed.emit(year, month, day, hour, minute)
+
+func advance_day():
+	day += 1
+	var days_in_month = get_days_in_month(month, year)
+	if day > days_in_month:
+		day = 1
 		advance_month()
+	time_changed.emit(year, month, day, hour, minute)
+
+func advance_week():
+	day += 7
+	var days_in_month = get_days_in_month(month, year)
+	if day > days_in_month:
+		day -= days_in_month
+		advance_month()
+	time_changed.emit(year, month, day, hour, minute)
 
 func advance_month():
 	month += 1
@@ -235,12 +281,35 @@ func advance_month():
 		year_changed.emit(year)
 	
 	month_changed.emit(year, month)
+	time_changed.emit(year, month, day, hour, minute)
 	update_world()
+
+func get_days_in_month(month: int, year: int) -> int:
+	match month:
+		1, 3, 5, 7, 8, 10, 12:
+			return 31
+		4, 6, 9, 11:
+			return 30
+		2:
+			# Simple leap year calculation
+			if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0):
+				return 29
+			else:
+				return 28
+		_:
+			return 30
 
 func advance_year():
 	# Keep this for step button compatibility
 	for i in range(12):
 		advance_month()
+
+func set_time_unit(unit: String):
+	time_unit = unit
+	print("Time unit set to: ", time_unit)
+
+func step_time():
+	advance_time()
 
 func update_world():
 	# Update all company capabilities based on time progression
