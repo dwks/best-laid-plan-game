@@ -43,6 +43,7 @@ var is_two_finger_gesture: bool = false
 
 # City selection tracking
 var selected_city_button: Button = null
+var button_clicked_this_frame: bool = false
 
 func _ready():
 	# Wait for GameManager to be ready before connecting signals
@@ -58,6 +59,10 @@ func _ready():
 	
 	# Enable input processing for zoom
 	set_process_input(true)
+
+func _process(_delta):
+	# Reset button click flag each frame
+	button_clicked_this_frame = false
 
 func _input(event):
 	# Handle scroll wheel zoom
@@ -75,8 +80,10 @@ func _input(event):
 			else:
 				# Stop dragging and check if we clicked on empty map area
 				is_dragging = false
-				# Check if click was on map background (not on a city button)
-				if not _is_click_on_city_button(event.position):
+				# Use a small delay to let button clicks process first
+				await get_tree().process_frame
+				# Only deselect if no button was clicked this frame
+				if not button_clicked_this_frame:
 					# Clear selected city and hide info panel
 					GameManager.selected_city = ""
 					hide_info_panel()
@@ -105,7 +112,10 @@ func _input(event):
 			
 			# Check for empty map click when all touches are released
 			if touch_points.size() == 0 and not is_two_finger_gesture:
-				if not _is_click_on_city_button(release_position):
+				# Use a small delay to let button clicks process first
+				await get_tree().process_frame
+				# Only deselect if no button was clicked this frame
+				if not button_clicked_this_frame:
 					# Clear selected city and hide info panel
 					GameManager.selected_city = ""
 					hide_info_panel()
@@ -166,13 +176,22 @@ func _input(event):
 
 func _is_click_on_city_button(click_position: Vector2) -> bool:
 	# Check if the click position is within any city button's bounds
+	# Return the topmost button that contains the click position
+	var topmost_button = null
+	var topmost_z_index = -1
+	
 	for city_id in city_buttons:
 		var button = city_buttons[city_id]
 		if button and button.visible:
 			var button_rect = Rect2(button.position, button.custom_minimum_size)
 			if button_rect.has_point(click_position):
-				return true
-	return false
+				# Check if this button is on top (higher z-index or later in scene tree)
+				var button_z_index = button.z_index
+				if button_z_index > topmost_z_index:
+					topmost_button = button
+					topmost_z_index = button_z_index
+	
+	return topmost_button != null
 
 func hide_info_panel():
 	# Hide the info panel
@@ -466,6 +485,9 @@ func create_city_buttons():
 		city_buttons[city_id] = button
 
 func _on_city_selected(city_name: String):
+	# Mark that a button was clicked this frame
+	button_clicked_this_frame = true
+	
 	# Deselect all city buttons first
 	for button_id in city_buttons:
 		var button = city_buttons[button_id]
