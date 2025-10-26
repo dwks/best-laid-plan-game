@@ -17,6 +17,8 @@ var simulation_speed: float = 1.0  # Steps per second
 var time_unit: String = "month"  # month, week, day, minute
 var is_simulation_running: bool = false
 var simulation_timer: Timer
+var historical_data: Dictionary = {}  # Company capability history over time
+var time_points: Array = []  # Array of time points for x-axis
 
 func _ready():
 	initialize_world()
@@ -317,6 +319,9 @@ func update_world():
 		var company = companies[company_id]
 		company.update_capabilities()
 	
+	# Record historical data for charting
+	record_historical_data()
+	
 	# Simulate exponential GPU growth and capability improvements
 	simulate_ai_progress()
 
@@ -360,3 +365,36 @@ func get_leading_companies() -> Array[Company]:
 	
 	sorted_companies.sort_custom(func(a, b): return a.get_total_capability() > b.get_total_capability())
 	return sorted_companies.slice(0, 10)  # Top 10 companies
+
+func record_historical_data():
+	# Record current time point
+	var current_time = get_current_time_value()
+	time_points.append(current_time)
+	
+	# Record each company's total capability
+	for company_id in companies:
+		var company = companies[company_id]
+		if not historical_data.has(company_id):
+			historical_data[company_id] = []
+		
+		historical_data[company_id].append(company.get_total_capability())
+
+func get_current_time_value() -> float:
+	# Convert current date/time to a single numeric value for x-axis
+	var total_days = (year - 2024) * 365.25  # Account for leap years
+	total_days += (month - 1) * 30.44  # Average days per month
+	total_days += (day - 1)
+	total_days += hour / 24.0
+	total_days += minute / (24.0 * 60.0)
+	return total_days
+
+func get_historical_data() -> Dictionary:
+	return historical_data
+
+func get_time_points() -> Array:
+	return time_points
+
+func get_company_historical_data(company_id: String) -> Array:
+	if historical_data.has(company_id):
+		return historical_data[company_id]
+	return []

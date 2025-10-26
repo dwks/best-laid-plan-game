@@ -21,6 +21,25 @@ const CITY_POSITIONS = {
 
 var city_buttons: Dictionary = {}
 var company_panel_visible: bool = false
+var chart_panel_visible: bool = false
+
+# Zoom and pan variables
+var zoom_level: float = 1.0
+var min_zoom: float = 1.0
+var max_zoom: float = 3.0
+var zoom_speed: float = 0.1
+var camera_offset: Vector2 = Vector2.ZERO
+
+# Click and drag variables
+var is_dragging: bool = false
+var drag_start_position: Vector2 = Vector2.ZERO
+var drag_start_camera_offset: Vector2 = Vector2.ZERO
+
+# Touch gesture variables for mobile
+var touch_points: Array = []
+var last_touch_distance: float = 0.0
+var last_zoom_level: float = 1.0
+var is_two_finger_gesture: bool = false
 
 func _ready():
 	# Wait for GameManager to be ready before connecting signals
@@ -33,6 +52,222 @@ func _ready():
 	create_city_buttons()
 	create_simulation_controls()
 	update_map_scale()
+	
+	# Enable input processing for zoom
+	set_process_input(true)
+
+func _input(event):
+	# Handle scroll wheel zoom
+	if event is InputEventMouseButton:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			zoom_in(event.position)
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			zoom_out(event.position)
+		elif event.button_index == MOUSE_BUTTON_LEFT:
+			if event.pressed:
+				# Start dragging
+				is_dragging = true
+				drag_start_position = event.position
+				drag_start_camera_offset = camera_offset
+			else:
+				# Stop dragging
+				is_dragging = false
+	
+	# Handle mouse movement for dragging
+	elif event is InputEventMouseMotion and is_dragging:
+		var drag_delta = event.position - drag_start_position
+		camera_offset = drag_start_camera_offset + drag_delta
+		apply_boundary_constraints()
+		apply_zoom()
+	
+	# Handle touch input for mobile
+	elif event is InputEventScreenTouch:
+		if event.pressed:
+			# Add touch point with index
+			touch_points.append({"index": event.index, "position": event.position})
+		else:
+			# Remove touch point by index
+			for i in range(touch_points.size() - 1, -1, -1):
+				if touch_points[i]["index"] == event.index:
+					touch_points.remove_at(i)
+					break
+		
+		# Reset touch gesture state when no touches
+		if touch_points.size() == 0:
+			last_touch_distance = 0.0
+			is_dragging = false
+			is_two_finger_gesture = false
+	
+	# Handle touch movement for mobile gestures
+	elif event is InputEventScreenDrag:
+		# Update touch point position by index
+		for i in range(touch_points.size()):
+			if touch_points[i]["index"] == event.index:
+				touch_points[i]["position"] = event.position
+				break
+		
+		# Handle two-finger pinch-to-zoom
+		if touch_points.size() == 2:
+			is_two_finger_gesture = true
+			is_dragging = false  # Stop any single-finger dragging
+			
+			var distance = touch_points[0]["position"].distance_to(touch_points[1]["position"])
+			if last_touch_distance > 0:
+				var zoom_factor = distance / last_touch_distance
+				var center_point = (touch_points[0]["position"] + touch_points[1]["position"]) / 2
+				
+				# More sensitive zoom thresholds
+				if zoom_factor > 1.02:  # Zoom in threshold
+					zoom_in(center_point, (zoom_factor - 1.0) * 2.0)
+					last_touch_distance = distance
+				elif zoom_factor < 0.98:  # Zoom out threshold
+					zoom_out(center_point, (1.0 - zoom_factor) * 2.0)
+					last_touch_distance = distance
+			else:
+				last_touch_distance = distance
+		
+		# Handle single-finger dragging (only when not doing two-finger gestures)
+		elif touch_points.size() == 1 and not is_two_finger_gesture:
+			if not is_dragging:
+				is_dragging = true
+				drag_start_position = event.position
+				drag_start_camera_offset = camera_offset
+			else:
+				var drag_delta = event.position - drag_start_position
+				camera_offset = drag_start_camera_offset + drag_delta
+				apply_boundary_constraints()
+				apply_zoom()
+	
+	# Handle pinch-to-zoom on mobile (fallback)
+	elif event is InputEventMagnifyGesture:
+		if event.factor > 1.0:
+			zoom_in(event.position, event.factor - 1.0)
+		elif event.factor < 1.0:
+			zoom_out(event.position, 1.0 - event.factor)
+
+func zoom_in(mouse_position: Vector2, factor: float = zoom_speed):
+	var old_zoom = zoom_level
+	zoom_level = min(zoom_level + factor, max_zoom)
+	
+	if zoom_level != old_zoom:
+		# Calculate zoom center relative to current map position
+		var viewport_size = get_viewport_rect().size
+		var texture_size = world_map_image.texture.get_size()
+		var scale_x = viewport_size.x / texture_size.x
+		var scale_y = viewport_size.y / texture_size.y
+		
+		# Calculate current map position in screen coordinates
+		var current_map_size = Vector2(
+			texture_size.x * scale_x * old_zoom,
+			texture_size.y * scale_y * old_zoom
+		)
+		
+		# Calculate zoom center relative to map
+		var zoom_center_relative = (mouse_position - camera_offset) / old_zoom
+		
+		# Adjust camera offset to zoom towards the touch point
+		var zoom_delta = zoom_level - old_zoom
+		camera_offset -= zoom_center_relative * zoom_delta
+		
+		apply_zoom()
+
+func zoom_out(mouse_position: Vector2, factor: float = zoom_speed):
+	var old_zoom = zoom_level
+	zoom_level = max(zoom_level - factor, min_zoom)
+	
+	if zoom_level != old_zoom:
+		# Calculate zoom center relative to current map position
+		var viewport_size = get_viewport_rect().size
+		var texture_size = world_map_image.texture.get_size()
+		var scale_x = viewport_size.x / texture_size.x
+		var scale_y = viewport_size.y / texture_size.y
+		
+		# Calculate current map position in screen coordinates
+		var current_map_size = Vector2(
+			texture_size.x * scale_x * old_zoom,
+			texture_size.y * scale_y * old_zoom
+		)
+		
+		# Calculate zoom center relative to map
+		var zoom_center_relative = (mouse_position - camera_offset) / old_zoom
+		
+		# Adjust camera offset to zoom towards the touch point
+		var zoom_delta = old_zoom - zoom_level
+		camera_offset += zoom_center_relative * zoom_delta
+		
+		apply_zoom()
+
+func apply_zoom():
+	# Apply zoom to the world map image
+	if world_map_image:
+		# Get the base scale from update_map_scale
+		var viewport_size = get_viewport_rect().size
+		var texture_size = world_map_image.texture.get_size()
+		var scale_x = viewport_size.x / texture_size.x
+		var scale_y = viewport_size.y / texture_size.y
+		
+		# Use individual scales to match window aspect ratio
+		world_map_image.scale = Vector2(scale_x * zoom_level, scale_y * zoom_level)
+		
+		# Apply boundary constraints to camera offset
+		apply_boundary_constraints()
+		
+		# Position map from top-left origin (same as buttons) and apply camera offset
+		world_map_image.position = camera_offset
+	
+	# Update city button positions
+	update_city_button_positions()
+
+func apply_boundary_constraints():
+	if not world_map_image or not world_map_image.texture:
+		return
+	
+	var viewport_size = get_viewport_rect().size
+	var texture_size = world_map_image.texture.get_size()
+	var scale_x = viewport_size.x / texture_size.x
+	var scale_y = viewport_size.y / texture_size.y
+	
+	# Calculate scaled texture size using individual scales
+	var scaled_texture_size = Vector2(
+		texture_size.x * scale_x * zoom_level,
+		texture_size.y * scale_y * zoom_level
+	)
+	
+	# Calculate boundary limits
+	var min_offset_x = viewport_size.x - scaled_texture_size.x
+	var min_offset_y = viewport_size.y - scaled_texture_size.y
+	
+	# Constrain camera offset to keep map in view
+	camera_offset.x = clamp(camera_offset.x, min_offset_x, 0)
+	camera_offset.y = clamp(camera_offset.y, min_offset_y, 0)
+
+func update_city_button_positions():
+	# Update city button positions based on zoom and camera offset
+	var viewport_size = get_viewport_rect().size
+	var map_size = Vector2(2000.0, 1171.0)  # Size of the PNG map
+	
+	# Get the same scaling factors as the map
+	var texture_size = world_map_image.texture.get_size()
+	var scale_x = viewport_size.x / texture_size.x
+	var scale_y = viewport_size.y / texture_size.y
+	
+	for city_id in city_buttons:
+		var button = city_buttons[city_id]
+		if button:
+			# Convert city position to texture coordinates
+			var relative_x = CITY_POSITIONS[city_id].x / map_size.x
+			var relative_y = CITY_POSITIONS[city_id].y / map_size.y
+			
+			# Apply the same scaling as the map (top-left origin)
+			var scaled_position = Vector2(
+				relative_x * texture_size.x * scale_x * zoom_level,
+				relative_y * texture_size.y * scale_y * zoom_level
+			)
+			
+			# Apply camera offset (same as map)
+			var final_position = scaled_position + camera_offset
+			
+			button.position = final_position - button.custom_minimum_size / 2
 
 func update_map_scale():
 	if world_map_image.texture == null:
@@ -40,16 +275,25 @@ func update_map_scale():
 	
 	var texture_size = world_map_image.texture.get_size()
 	
-	# Set the pivot offset to scale from the center of the texture
-	world_map_image.pivot_offset = texture_size / 2.0
+	# Set pivot offset to top-left (same as buttons)
+	world_map_image.pivot_offset = Vector2.ZERO
 	
-	# Calculate the scale factor to fill the viewport
+	# Calculate individual scale factors to match window aspect ratio
 	var viewport_size = get_viewport_rect().size
 	var scale_x = viewport_size.x / texture_size.x
 	var scale_y = viewport_size.y / texture_size.y
 	
-	# Set the scale
-	world_map_image.scale = Vector2(scale_x, scale_y)
+	# Apply zoom using individual scales to match window aspect ratio
+	world_map_image.scale = Vector2(scale_x * zoom_level, scale_y * zoom_level)
+	
+	# Apply boundary constraints to camera offset
+	apply_boundary_constraints()
+	
+	# Position map from top-left origin (same as buttons) and apply camera offset
+	world_map_image.position = camera_offset
+	
+	# Update city button positions
+	update_city_button_positions()
 
 func load_world_map():
 	# Try loading as a resource first (will use imported texture)
@@ -85,20 +329,37 @@ func reposition_city_buttons():
 	var viewport_size = get_viewport_rect().size
 	var map_size = Vector2(2000.0, 1171.0)
 	
+	# Get the same scaling factors as the map
+	var texture_size = world_map_image.texture.get_size()
+	var scale_x = viewport_size.x / texture_size.x
+	var scale_y = viewport_size.y / texture_size.y
+	
 	for city_id in city_buttons:
 		var button = city_buttons[city_id]
+		# Convert city position to texture coordinates
 		var relative_x = CITY_POSITIONS[city_id].x / map_size.x
 		var relative_y = CITY_POSITIONS[city_id].y / map_size.y
+		
+		# Apply the same scaling as the map (top-left origin)
 		var scaled_position = Vector2(
-			relative_x * viewport_size.x,
-			relative_y * viewport_size.y
+			relative_x * texture_size.x * scale_x * zoom_level,
+			relative_y * texture_size.y * scale_y * zoom_level
 		)
-		button.position = scaled_position - button.custom_minimum_size / 2
+		
+		# Apply camera offset (same as map)
+		var final_position = scaled_position + camera_offset
+		
+		button.position = final_position - button.custom_minimum_size / 2
 
 func create_city_buttons():
 	# Get the viewport size to scale positions relative to window
 	var viewport_size = get_viewport_rect().size
 	var map_size = Vector2(2000.0, 1171.0)  # Size of the PNG map
+	
+	# Get the same scaling factors as the map
+	var texture_size = world_map_image.texture.get_size()
+	var scale_x = viewport_size.x / texture_size.x
+	var scale_y = viewport_size.y / texture_size.y
 	
 	for city_id in CITY_POSITIONS.keys():
 		var city_data = GameManager.get_city_data(city_id)
@@ -109,15 +370,20 @@ func create_city_buttons():
 		button.custom_minimum_size = Vector2(100, 50)
 		button.add_theme_font_size_override("font_size", 24)
 		
-		# Scale positions based on window size
+		# Convert city position to texture coordinates
 		var relative_x = CITY_POSITIONS[city_id].x / map_size.x
 		var relative_y = CITY_POSITIONS[city_id].y / map_size.y
+		
+		# Apply the same scaling as the map (top-left origin)
 		var scaled_position = Vector2(
-			relative_x * viewport_size.x,
-			relative_y * viewport_size.y
+			relative_x * texture_size.x * scale_x * zoom_level,
+			relative_y * texture_size.y * scale_y * zoom_level
 		)
 		
-		button.position = scaled_position - button.custom_minimum_size / 2
+		# Apply camera offset (same as map)
+		var final_position = scaled_position + camera_offset
+		
+		button.position = final_position - button.custom_minimum_size / 2
 		button.text = city_data.name
 		button.flat = true
 		
@@ -162,7 +428,7 @@ func create_simulation_controls():
 	# Create simulation control panel
 	var control_panel = Panel.new()
 	control_panel.position = Vector2(50, 50)
-	control_panel.custom_minimum_size = Vector2(500, 120)
+	control_panel.custom_minimum_size = Vector2(700, 120)
 	control_panel.name = "SimulationControlPanel"
 	
 	var style = StyleBoxFlat.new()
@@ -241,10 +507,21 @@ func create_simulation_controls():
 	rankings_button.pressed.connect(_on_leaderboard_toggle)
 	control_panel.add_child(rankings_button)
 	
+	# Show/Hide Chart button
+	var chart_button = Button.new()
+	chart_button.position = Vector2(580, 60)
+	chart_button.custom_minimum_size = Vector2(100, 25)
+	chart_button.text = "Show Chart"
+	chart_button.pressed.connect(_on_chart_toggle)
+	control_panel.add_child(chart_button)
+	
 	add_child(control_panel)
 	
 	# Create company comparison panel
 	create_company_panel()
+	
+	# Create chart panel
+	create_chart_panel()
 
 func _on_step_pressed():
 	GameManager.step_time()
@@ -314,9 +591,159 @@ func _on_leaderboard_toggle():
 	# Update button text
 	var control_panel = get_node("SimulationControlPanel")
 	if control_panel:
-		var rankings_button = control_panel.get_child(8)
+		var rankings_button = control_panel.get_child(8)  # 9th child (0-indexed) - rankings button
 		if rankings_button:
 			rankings_button.text = "Hide Rankings" if company_panel_visible else "Show Rankings"
+
+func _on_chart_toggle():
+	chart_panel_visible = !chart_panel_visible
+	var chart_panel = get_node("ChartPanel")
+	if chart_panel:
+		chart_panel.visible = chart_panel_visible
+	
+	# Update button text
+	var control_panel = get_node("SimulationControlPanel")
+	if control_panel:
+		var chart_button = control_panel.get_child(9)  # 10th child (0-indexed) - chart button
+		if chart_button:
+			chart_button.text = "Hide Chart" if chart_panel_visible else "Show Chart"
+
+func create_chart_panel():
+	# Create a panel to show company capability charts
+	var chart_panel = Panel.new()
+	chart_panel.position = Vector2(50, 180)
+	chart_panel.custom_minimum_size = Vector2(600, 400)
+	chart_panel.name = "ChartPanel"
+	
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.2, 0.2, 0.25, 0.9)
+	style.border_width_left = 2
+	style.border_width_top = 2
+	style.border_width_right = 2
+	style.border_width_bottom = 2
+	style.border_color = Color(0.4, 0.5, 0.6, 1)
+	chart_panel.add_theme_stylebox_override("panel", style)
+	
+	# Title
+	var title_label = Label.new()
+	title_label.position = Vector2(10, 10)
+	title_label.text = "AI Company Capability Growth Over Time"
+	title_label.add_theme_font_size_override("font_size", 16)
+	chart_panel.add_child(title_label)
+	
+	# Chart area
+	var chart_area = Control.new()
+	chart_area.position = Vector2(10, 40)
+	chart_area.custom_minimum_size = Vector2(580, 350)
+	chart_area.name = "ChartArea"
+	chart_panel.add_child(chart_area)
+	
+	add_child(chart_panel)
+	chart_panel.visible = false  # Hidden by default
+	update_chart()
+
+func update_chart():
+	var chart_panel = get_node("ChartPanel")
+	if not chart_panel or not chart_panel.visible:
+		return
+	
+	var chart_area = chart_panel.get_node("ChartArea")
+	if not chart_area:
+		return
+	
+	# Clear previous chart
+	for child in chart_area.get_children():
+		child.queue_free()
+	
+	var historical_data = GameManager.get_historical_data()
+	var time_points = GameManager.get_time_points()
+	
+	if time_points.size() < 2:
+		var no_data_label = Label.new()
+		no_data_label.position = Vector2(50, 50)
+		no_data_label.text = "Not enough data to display chart"
+		no_data_label.add_theme_font_size_override("font_size", 14)
+		chart_area.add_child(no_data_label)
+		return
+	
+	# Find min/max values for scaling
+	var min_time = time_points[0]
+	var max_time = time_points[-1]
+	var min_value = 0.0
+	var max_value = 0.0
+	
+	for company_id in historical_data:
+		var data = historical_data[company_id]
+		for value in data:
+			max_value = max(max_value, value)
+	
+	# Define colors for different companies
+	var company_colors = {
+		"openbrain": Color(1.0, 0.2, 0.2),      # Red
+		"deepcent": Color(0.4, 0.6, 1.0),        # Bright Blue
+		"google_ai": Color(0.2, 1.0, 0.2),      # Green
+		"microsoft_ai": Color(1.0, 0.5, 0.0),   # Orange
+		"anthropic": Color(1.0, 0.0, 1.0),      # Magenta
+		"deepmind": Color(0.0, 1.0, 1.0),       # Cyan
+		"huawei_ai": Color(1.0, 1.0, 0.0),      # Yellow
+		"deepseek": Color(0.5, 0.5, 0.5),       # Gray
+		"alibaba_ai": Color(0.8, 0.4, 0.0),     # Brown
+		"tsmc_ai": Color(0.4, 0.8, 0.4)         # Light Green
+	}
+	
+	# Draw chart lines for each company
+	var chart_width = 580
+	var chart_height = 350
+	var margin = 40
+	
+	for company_id in historical_data:
+		var data = historical_data[company_id]
+		if data.size() < 2:
+			continue
+		
+		var color = company_colors.get(company_id, Color.WHITE)
+		
+		# Draw line segments
+		for i in range(data.size() - 1):
+			var x1 = margin + (time_points[i] - min_time) / (max_time - min_time) * (chart_width - 2 * margin)
+			var y1 = margin + (1.0 - (data[i] - min_value) / (max_value - min_value)) * (chart_height - 2 * margin)
+			var x2 = margin + (time_points[i + 1] - min_time) / (max_time - min_time) * (chart_width - 2 * margin)
+			var y2 = margin + (1.0 - (data[i + 1] - min_value) / (max_value - min_value)) * (chart_height - 2 * margin)
+			
+			var line = Line2D.new()
+			line.add_point(Vector2(x1, y1))
+			line.add_point(Vector2(x2, y2))
+			line.default_color = color
+			line.width = 2.0
+			chart_area.add_child(line)
+	
+	# Add axis labels
+	var x_label = Label.new()
+	x_label.position = Vector2(chart_width / 2 - 50, chart_height - 20)
+	x_label.text = "Time (Days from 2024)"
+	x_label.add_theme_font_size_override("font_size", 12)
+	chart_area.add_child(x_label)
+	
+	var y_label = Label.new()
+	y_label.position = Vector2(5, chart_height / 2 - 20)
+	y_label.text = "Total Capability"
+	y_label.add_theme_font_size_override("font_size", 12)
+	y_label.rotation = -PI / 2
+	chart_area.add_child(y_label)
+	
+	# Add legend
+	var legend_y = 10
+	for company_id in historical_data:
+		if company_id in company_colors:
+			var company = GameManager.get_company_data(company_id)
+			if company:
+				var legend_item = Label.new()
+				legend_item.position = Vector2(chart_width - 150, legend_y)
+				legend_item.text = company.name
+				legend_item.add_theme_font_size_override("font_size", 10)
+				legend_item.add_theme_color_override("font_color", company_colors[company_id])
+				chart_area.add_child(legend_item)
+				legend_y += 15
 
 func _on_year_changed(new_year: int):
 	# Update year display
@@ -351,6 +778,9 @@ func _on_time_changed(year: int, month: int, day: int, hour: int, minute: int):
 		
 		# Update play button text
 		update_play_button_text()
+	
+	# Update chart if visible
+	update_chart()
 	
 	# Update city buttons with new company data
 	update_city_buttons()
