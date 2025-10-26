@@ -41,6 +41,9 @@ var last_touch_distance: float = 0.0
 var last_zoom_level: float = 1.0
 var is_two_finger_gesture: bool = false
 
+# City selection tracking
+var selected_city_button: Button = null
+
 func _ready():
 	# Wait for GameManager to be ready before connecting signals
 	await get_tree().process_frame
@@ -70,8 +73,13 @@ func _input(event):
 				drag_start_position = event.position
 				drag_start_camera_offset = camera_offset
 			else:
-				# Stop dragging
+				# Stop dragging and check if we clicked on empty map area
 				is_dragging = false
+				# Check if click was on map background (not on a city button)
+				if not _is_click_on_city_button(event.position):
+					# Clear selected city and hide info panel
+					GameManager.selected_city = ""
+					hide_info_panel()
 	
 	# Handle mouse movement for dragging
 	elif event is InputEventMouseMotion and is_dragging:
@@ -86,11 +94,21 @@ func _input(event):
 			# Add touch point with index
 			touch_points.append({"index": event.index, "position": event.position})
 		else:
+			# Store the release position for potential empty map click detection
+			var release_position = event.position
+			
 			# Remove touch point by index
 			for i in range(touch_points.size() - 1, -1, -1):
 				if touch_points[i]["index"] == event.index:
 					touch_points.remove_at(i)
 					break
+			
+			# Check for empty map click when all touches are released
+			if touch_points.size() == 0 and not is_two_finger_gesture:
+				if not _is_click_on_city_button(release_position):
+					# Clear selected city and hide info panel
+					GameManager.selected_city = ""
+					hide_info_panel()
 		
 		# Reset touch gesture state when no touches
 		if touch_points.size() == 0:
@@ -137,6 +155,7 @@ func _input(event):
 				camera_offset = drag_start_camera_offset + drag_delta
 				apply_boundary_constraints()
 				apply_zoom()
+		
 	
 	# Handle pinch-to-zoom on mobile (fallback)
 	elif event is InputEventMagnifyGesture:
@@ -144,6 +163,32 @@ func _input(event):
 			zoom_in(event.position, event.factor - 1.0)
 		elif event.factor < 1.0:
 			zoom_out(event.position, 1.0 - event.factor)
+
+func _is_click_on_city_button(click_position: Vector2) -> bool:
+	# Check if the click position is within any city button's bounds
+	for city_id in city_buttons:
+		var button = city_buttons[city_id]
+		if button and button.visible:
+			var button_rect = Rect2(button.position, button.custom_minimum_size)
+			if button_rect.has_point(click_position):
+				return true
+	return false
+
+func hide_info_panel():
+	# Hide the info panel
+	var info_panel = get_node("InfoPanel")
+	if info_panel:
+		info_panel.visible = false
+	
+	# Deselect all city buttons
+	for button_id in city_buttons:
+		var button = city_buttons[button_id]
+		if button:
+			button.button_pressed = false
+			button.release_focus()  # Force button to lose focus
+			button.queue_redraw()   # Force visual update
+	
+	selected_city_button = null
 
 func zoom_in(mouse_position: Vector2, factor: float = zoom_speed):
 	var old_zoom = zoom_level
@@ -367,6 +412,7 @@ func create_city_buttons():
 			continue
 			
 		var button = Button.new()
+		button.toggle_mode = true
 		button.custom_minimum_size = Vector2(100, 50)
 		button.add_theme_font_size_override("font_size", 24)
 		
@@ -405,13 +451,36 @@ func create_city_buttons():
 		style_hover.border_width_top = 2
 		style_hover.border_width_bottom = 2
 		button.add_theme_stylebox_override("hover", style_hover)
+
+		var style_pressed = StyleBoxFlat.new()
+		style_pressed.bg_color = Color(0.4, 0.7, 1.0, 0.9)  # Brighter blue
+		style_pressed.border_color = Color(1.0, 1.0, 1.0, 1.0)  # White border
+		style_pressed.border_width_left = 3
+		style_pressed.border_width_right = 3
+		style_pressed.border_width_top = 3
+		style_pressed.border_width_bottom = 3
+		button.add_theme_stylebox_override("pressed", style_pressed)
 		
 		button.pressed.connect(func(): GameManager.select_city(city_id))
 		city_container.add_child(button)
 		city_buttons[city_id] = button
 
 func _on_city_selected(city_name: String):
+	# Deselect all city buttons first
+	for button_id in city_buttons:
+		var button = city_buttons[button_id]
+		if button:
+			button.button_pressed = false
+	
+	# Select the new city button
+	if city_buttons.has(city_name):
+		var button = city_buttons[city_name]
+		if button:
+			button.button_pressed = true
+			selected_city_button = button
+	
 	update_info_panel(city_name)
+
 
 func update_info_panel(city_name: String):
 	var city_data = GameManager.get_city_data(city_name)
