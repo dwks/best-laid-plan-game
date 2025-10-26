@@ -16,67 +16,77 @@ func _ready():
 	setup_simulation_timer()
 
 func initialize_world():
-	# Initialize world state with AI and tech hub cities
+	# Initialize world state with AI and tech hub cities based on AI 2027 scenario
 	world_state = {
 		"washington_dc": {
 			"name": "Washington DC",
 			"population": 692_683,
-			"policy_restrictions": "regulated",
-			"ai_companies": ["Palo Alto Networks (Gov)"]
+			"policy_restrictions": "Heavy Government Oversight",
+			"ai_companies": ["Government AI Labs"],
+			"description": "Center of AI policy and regulation. Home to government oversight committees."
 		},
 		"san_francisco": {
-			"name": "San Francisco",
-			"population": 873_965,
-			"policy_restrictions": "permissive",
-			"ai_companies": ["OpenAI", "Anthropic", "Google AI"]
+			"name": "San Francisco Bay Area",
+			"population": 7_765_640,
+			"policy_restrictions": "Permissive Tech Hub",
+			"ai_companies": ["OpenBrain", "Anthropic", "Google AI"],
+			"description": "The heart of the AI revolution. OpenBrain leads the race with Agent-4."
 		},
 		"seattle": {
 			"name": "Seattle",
 			"population": 749_256,
-			"policy_restrictions": "moderate",
-			"ai_companies": ["Microsoft AI", "Amazon AI Labs"]
+			"policy_restrictions": "Moderate Regulation",
+			"ai_companies": ["Microsoft AI"],
+			"description": "Microsoft's AI headquarters, focusing on enterprise AI solutions."
 		},
 		"new_york": {
 			"name": "New York",
 			"population": 8_336_817,
-			"policy_restrictions": "moderate",
-			"ai_companies": ["Bloomberg AI"]
+			"policy_restrictions": "Financial AI Focus",
+			"ai_companies": ["Bloomberg AI", "Goldman Sachs AI"],
+			"description": "Financial AI applications and algorithmic trading systems."
 		},
 		"london": {
 			"name": "London",
 			"population": 9_648_110,
-			"policy_restrictions": "strict",
-			"ai_companies": ["DeepMind"]
+			"policy_restrictions": "EU AI Act Compliance",
+			"ai_companies": ["DeepMind"],
+			"description": "DeepMind's headquarters, focusing on AI safety and alignment research."
 		},
 		"beijing": {
 			"name": "Beijing",
 			"population": 21_542_000,
-			"policy_restrictions": "state-controlled",
-			"ai_companies": ["DeepSeek", "Alibaba AI (Qwen)", "Baidu AI"]
+			"policy_restrictions": "State-Controlled AI",
+			"ai_companies": ["DeepCent", "DeepSeek", "Alibaba AI (Qwen)"],
+			"description": "China's AI capital. DeepCent races against OpenBrain with massive state backing."
 		},
 		"shenzhen": {
 			"name": "Shenzhen",
 			"population": 17_600_000,
-			"policy_restrictions": "permissive",
-			"ai_companies": ["Huawei AI", "Tencent AI Lab"]
+			"policy_restrictions": "Tech Innovation Zone",
+			"ai_companies": ["Huawei AI", "Tencent AI Lab"],
+			"description": "China's Silicon Valley, home to hardware-focused AI companies."
 		},
 		"singapore": {
 			"name": "Singapore",
 			"population": 5_686_000,
-			"policy_restrictions": "moderate",
-			"ai_companies": ["Grab AI"]
+			"policy_restrictions": "AI Governance Hub",
+			"ai_companies": ["Grab AI", "Government AI Lab"],
+			"description": "Regional AI governance center, balancing innovation with safety."
 		},
 		"tokyo": {
 			"name": "Tokyo",
 			"population": 13_515_271,
-			"policy_restrictions": "permissive",
-			"ai_companies": ["Sony AI", "Sakana AI"]
+			"policy_restrictions": "Conservative AI Policy",
+			"ai_companies": ["Sony AI", "Sakana AI"],
+			"description": "Japanese AI companies focusing on robotics and consumer applications."
 		},
 		"taipei": {
 			"name": "Taipei",
 			"population": 2_646_000,
-			"policy_restrictions": "moderate",
-			"ai_companies": ["TSMC AI", "MediaTek AI"]
+			"policy_restrictions": "Semiconductor AI Focus",
+			"ai_companies": ["TSMC AI", "MediaTek AI"],
+			"description": "Taiwan's AI chip manufacturing hub, critical for global AI infrastructure."
 		}
 	}
 
@@ -150,6 +160,42 @@ func initialize_companies():
 	companies["tsmc_ai"].set_capability_focus(Company.CapabilityAxis.CODING, 1.8)
 	companies["tsmc_ai"].set_capability_focus(Company.CapabilityAxis.RESEARCH, 1.6)
 	companies["tsmc_ai"].set_gpu_growth_rate(1.6)
+	
+	# Additional companies from AI 2027 scenario
+	companies["tencent_ai"] = Company.new("Tencent AI Lab", "China", "shenzhen", 6000, 2024)
+	companies["tencent_ai"].set_capability_focus(Company.CapabilityAxis.CODING, 2.0)
+	companies["tencent_ai"].set_capability_focus(Company.CapabilityAxis.RESEARCH, 1.5)
+	companies["tencent_ai"].set_gpu_growth_rate(1.7)
+	
+	companies["grab_ai"] = Company.new("Grab AI", "Singapore", "singapore", 2000, 2024)
+	companies["grab_ai"].set_capability_focus(Company.CapabilityAxis.CODING, 1.5)
+	companies["grab_ai"].set_capability_focus(Company.CapabilityAxis.RESEARCH, 1.3)
+	companies["grab_ai"].set_gpu_growth_rate(1.4)
+	
+	companies["sakana_ai"] = Company.new("Sakana AI", "Japan", "tokyo", 1500, 2024)
+	companies["sakana_ai"].set_capability_focus(Company.CapabilityAxis.RESEARCH, 1.8)
+	companies["sakana_ai"].set_capability_focus(Company.CapabilityAxis.ALIGNMENT, 1.6)
+	companies["sakana_ai"].set_gpu_growth_rate(1.3)
+	
+	companies["bloomberg_ai"] = Company.new("Bloomberg AI", "USA", "new_york", 3000, 2024)
+	companies["bloomberg_ai"].set_capability_focus(Company.CapabilityAxis.CODING, 1.7)
+	companies["bloomberg_ai"].set_capability_focus(Company.CapabilityAxis.RESEARCH, 1.4)
+	companies["bloomberg_ai"].set_gpu_growth_rate(1.5)
+	
+	companies["goldman_sachs_ai"] = Company.new("Goldman Sachs AI", "USA", "new_york", 2500, 2024)
+	companies["goldman_sachs_ai"].set_capability_focus(Company.CapabilityAxis.CODING, 1.6)
+	companies["goldman_sachs_ai"].set_capability_focus(Company.CapabilityAxis.SECURITY, 1.8)
+	companies["goldman_sachs_ai"].set_gpu_growth_rate(1.4)
+	
+	companies["government_ai_lab"] = Company.new("Government AI Lab", "USA", "washington_dc", 4000, 2024)
+	companies["government_ai_lab"].set_capability_focus(Company.CapabilityAxis.ALIGNMENT, 2.0)
+	companies["government_ai_lab"].set_capability_focus(Company.CapabilityAxis.SECURITY, 1.8)
+	companies["government_ai_lab"].set_gpu_growth_rate(1.2)  # Slower growth due to bureaucracy
+	
+	companies["singapore_gov_ai"] = Company.new("Singapore Gov AI", "Singapore", "singapore", 1500, 2024)
+	companies["singapore_gov_ai"].set_capability_focus(Company.CapabilityAxis.ALIGNMENT, 1.8)
+	companies["singapore_gov_ai"].set_capability_focus(Company.CapabilityAxis.RESEARCH, 1.5)
+	companies["singapore_gov_ai"].set_gpu_growth_rate(1.3)
 
 func setup_simulation_timer():
 	var timer = Timer.new()

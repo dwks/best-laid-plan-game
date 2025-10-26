@@ -20,6 +20,7 @@ const CITY_POSITIONS = {
 }
 
 var city_buttons: Dictionary = {}
+var company_panel_visible: bool = false
 
 func _ready():
 	GameManager.city_selected.connect(_on_city_selected)
@@ -215,12 +216,14 @@ func create_simulation_controls():
 	step_button.pressed.connect(func(): GameManager.advance_year())
 	control_panel.add_child(step_button)
 	
-	# Leading companies display
-	var companies_label = Label.new()
-	companies_label.position = Vector2(10, 110)
-	companies_label.text = "Leading Companies:"
-	companies_label.add_theme_font_size_override("font_size", 12)
-	control_panel.add_child(companies_label)
+	# Leaderboard toggle button
+	var leaderboard_button = Button.new()
+	leaderboard_button.position = Vector2(10, 110)
+	leaderboard_button.custom_minimum_size = Vector2(120, 30)
+	leaderboard_button.text = "Show Rankings"
+	leaderboard_button.pressed.connect(_on_leaderboard_toggle)
+	control_panel.add_child(leaderboard_button)
+	
 	
 	add_child(control_panel)
 	
@@ -232,6 +235,19 @@ func _on_play_pause_pressed():
 		GameManager.stop_simulation()
 	else:
 		GameManager.start_simulation()
+
+func _on_leaderboard_toggle():
+	company_panel_visible = !company_panel_visible
+	var company_panel = get_node("CompanyPanel")
+	if company_panel:
+		company_panel.visible = company_panel_visible
+	
+	# Update button text
+	var control_panel = get_node("Panel")
+	if control_panel:
+		var leaderboard_button = control_panel.get_child(5)  # 6th child (0-indexed)
+		if leaderboard_button:
+			leaderboard_button.text = "Hide Rankings" if company_panel_visible else "Show Rankings"
 
 func _on_year_changed(new_year: int):
 	# Update year display
@@ -246,6 +262,10 @@ func _on_year_changed(new_year: int):
 	
 	# Update company rankings panel
 	update_company_panel()
+	
+	# Update info panel if a city is selected
+	if GameManager.selected_city != "":
+		update_info_panel(GameManager.selected_city)
 
 func update_city_buttons():
 	# Update city buttons to show current company capabilities
@@ -278,24 +298,29 @@ func format_city_info(data: Dictionary) -> String:
 			city_id = id
 			break
 	
-	var info = """City: %s
-Population: %s
-Policy: %s
-""" % [
-	data.name,
-	str(data.population),
-	data.policy_restrictions
-]
+	var info = "%s\nPopulation: %s\nPolicy: %s\n" % [
+		data.name,
+		str(data.population),
+		data.policy_restrictions
+	]
 	
-	# Add AI companies with capabilities
+	# Add AI companies with simplified info
 	var city_companies = GameManager.get_companies_by_city(city_id)
 	if city_companies.size() > 0:
 		info += "\nAI Companies:\n"
-		for company in city_companies:
-			info += "  • %s\n" % company.name
-			info += "    %s\n" % company.get_capability_string()
-			info += "    %s\n" % company.get_gpu_string()
-			info += "    Total Capability: %.1f\n\n" % company.get_total_capability()
+		
+		# Sort companies by total capability
+		city_companies.sort_custom(func(a, b): return a.get_total_capability() > b.get_total_capability())
+		
+		for i in range(min(3, city_companies.size())):  # Show only top 3 companies
+			var company = city_companies[i]
+			info += "%d. %s\n" % [i + 1, company.name]
+			info += "   Total: %.0f | GPUs: %d\n" % [company.get_total_capability(), company.gpu_count]
+		
+		if city_companies.size() > 3:
+			info += "... and %d more\n" % (city_companies.size() - 3)
+	else:
+		info += "\nNo AI companies here.\n"
 	
 	return info
 
@@ -329,6 +354,7 @@ func create_company_panel():
 	company_panel.add_child(company_list)
 	
 	add_child(company_panel)
+	company_panel.visible = false  # Hidden by default
 	update_company_panel()
 
 func update_company_panel():
