@@ -36,9 +36,10 @@ func _init(company_name: String, company_country: String, company_city: String,
 	update_capabilities()
 
 func update_capabilities():
-	# Calculate capabilities based on GPU count and time elapsed
-	var years_elapsed = max(0, GameManager.year - founded_year)
-	var gpu_multiplier = pow(gpu_growth_rate, years_elapsed)
+	# Calculate capabilities based on GPU count and time elapsed (in months)
+	var months_elapsed = max(0, (GameManager.year - founded_year) * 12 + (GameManager.month - 1))
+	var monthly_growth_rate = pow(gpu_growth_rate, 1.0/12.0)  # Convert annual to monthly
+	var gpu_multiplier = pow(monthly_growth_rate, months_elapsed)
 	var effective_gpus = gpu_count * gpu_multiplier
 	
 	# Capabilities scale with GPU count and company focus

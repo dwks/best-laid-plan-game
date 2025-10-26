@@ -23,8 +23,11 @@ var city_buttons: Dictionary = {}
 var company_panel_visible: bool = false
 
 func _ready():
+	# Wait for GameManager to be ready before connecting signals
+	await get_tree().process_frame
 	GameManager.city_selected.connect(_on_city_selected)
 	GameManager.year_changed.connect(_on_year_changed)
+	GameManager.month_changed.connect(_on_month_changed)
 	get_viewport().size_changed.connect(_on_viewport_size_changed)
 	load_world_map()
 	create_city_buttons()
@@ -159,7 +162,8 @@ func create_simulation_controls():
 	# Create simulation control panel
 	var control_panel = Panel.new()
 	control_panel.position = Vector2(50, 50)
-	control_panel.custom_minimum_size = Vector2(300, 150)
+	control_panel.custom_minimum_size = Vector2(350, 180)
+	control_panel.name = "SimulationControlPanel"
 	
 	var style = StyleBoxFlat.new()
 	style.bg_color = Color(0.2, 0.2, 0.25, 0.9)
@@ -170,10 +174,10 @@ func create_simulation_controls():
 	style.border_color = Color(0.4, 0.5, 0.6, 1)
 	control_panel.add_theme_stylebox_override("panel", style)
 	
-	# Year display
+	# Year/Month display
 	var year_label = Label.new()
 	year_label.position = Vector2(10, 10)
-	year_label.text = "Year: 2024"
+	year_label.text = get_month_name(GameManager.month) + " " + str(GameManager.year)
 	year_label.add_theme_font_size_override("font_size", 18)
 	control_panel.add_child(year_label)
 	
@@ -213,7 +217,7 @@ func create_simulation_controls():
 	step_button.position = Vector2(240, 70)
 	step_button.custom_minimum_size = Vector2(50, 30)
 	step_button.text = "Step"
-	step_button.pressed.connect(func(): GameManager.advance_year())
+	step_button.pressed.connect(_on_step_pressed)
 	control_panel.add_child(step_button)
 	
 	# Leaderboard toggle button
@@ -230,6 +234,9 @@ func create_simulation_controls():
 	# Create company comparison panel
 	create_company_panel()
 
+func _on_step_pressed():
+	GameManager.advance_month()
+
 func _on_play_pause_pressed():
 	if GameManager.is_simulation_running:
 		GameManager.stop_simulation()
@@ -243,19 +250,19 @@ func _on_leaderboard_toggle():
 		company_panel.visible = company_panel_visible
 	
 	# Update button text
-	var control_panel = get_node("Panel")
+	var control_panel = get_node("SimulationControlPanel")
 	if control_panel:
-		var leaderboard_button = control_panel.get_child(5)  # 6th child (0-indexed)
+		var leaderboard_button = control_panel.get_child(6)  # 7th child (0-indexed) - leaderboard button
 		if leaderboard_button:
 			leaderboard_button.text = "Hide Rankings" if company_panel_visible else "Show Rankings"
 
 func _on_year_changed(new_year: int):
 	# Update year display
-	var control_panel = get_node("Panel")
+	var control_panel = get_node("SimulationControlPanel")
 	if control_panel:
 		var year_label = control_panel.get_child(0)
 		if year_label:
-			year_label.text = "Year: %d" % new_year
+			year_label.text = get_month_name(GameManager.month) + " " + str(new_year)
 	
 	# Update city buttons with new company data
 	update_city_buttons()
@@ -266,6 +273,29 @@ func _on_year_changed(new_year: int):
 	# Update info panel if a city is selected
 	if GameManager.selected_city != "":
 		update_info_panel(GameManager.selected_city)
+
+func _on_month_changed(new_year: int, new_month: int):
+	# Update month display
+	var control_panel = get_node("SimulationControlPanel")
+	if control_panel:
+		var year_label = control_panel.get_child(0)
+		if year_label:
+			year_label.text = get_month_name(new_month) + " " + str(new_year)
+	
+	# Update city buttons with new company data
+	update_city_buttons()
+	
+	# Update company rankings panel
+	update_company_panel()
+	
+	# Update info panel if a city is selected
+	if GameManager.selected_city != "":
+		update_info_panel(GameManager.selected_city)
+
+func get_month_name(month_num: int) -> String:
+	var months = ["January", "February", "March", "April", "May", "June",
+				  "July", "August", "September", "October", "November", "December"]
+	return months[month_num - 1]
 
 func update_city_buttons():
 	# Update city buttons to show current company capabilities
@@ -328,7 +358,7 @@ func create_company_panel():
 	# Create a panel to show top companies and their capabilities
 	var company_panel = Panel.new()
 	company_panel.position = Vector2(50, 220)
-	company_panel.custom_minimum_size = Vector2(400, 300)
+	company_panel.custom_minimum_size = Vector2(500, 400)
 	company_panel.name = "CompanyPanel"
 	
 	var style = StyleBoxFlat.new()
@@ -350,7 +380,7 @@ func create_company_panel():
 	# Company list
 	var company_list = VBoxContainer.new()
 	company_list.position = Vector2(10, 40)
-	company_list.custom_minimum_size = Vector2(380, 250)
+	company_list.custom_minimum_size = Vector2(480, 350)
 	company_panel.add_child(company_list)
 	
 	add_child(company_panel)
@@ -381,14 +411,14 @@ func update_company_panel():
 		var rank_label = Label.new()
 		rank_label.custom_minimum_size = Vector2(30, 0)
 		rank_label.text = "%d." % (i + 1)
-		rank_label.add_theme_font_size_override("font_size", 12)
+		rank_label.add_theme_font_size_override("font_size", 16)
 		company_container.add_child(rank_label)
 		
 		# Company name
 		var name_label = Label.new()
 		name_label.custom_minimum_size = Vector2(120, 0)
 		name_label.text = company.name
-		name_label.add_theme_font_size_override("font_size", 12)
+		name_label.add_theme_font_size_override("font_size", 16)
 		company_container.add_child(name_label)
 		
 		# Capabilities
@@ -399,13 +429,13 @@ func update_company_panel():
 			company.get_capability(Company.CapabilityAxis.SECURITY),
 			company.get_capability(Company.CapabilityAxis.ALIGNMENT)
 		]
-		caps_label.add_theme_font_size_override("font_size", 10)
+		caps_label.add_theme_font_size_override("font_size", 14)
 		company_container.add_child(caps_label)
 		
 		# Total capability
 		var total_label = Label.new()
 		total_label.text = "Total: %.0f" % company.get_total_capability()
-		total_label.add_theme_font_size_override("font_size", 10)
+		total_label.add_theme_font_size_override("font_size", 14)
 		company_container.add_child(total_label)
 		
 		company_list.add_child(company_container)

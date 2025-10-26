@@ -2,17 +2,22 @@ extends Node
 
 signal city_selected(city_name: String)
 signal year_changed(year: int)
+signal month_changed(year: int, month: int)
 
 var selected_city: String = ""
 var world_state: Dictionary = {}
 var year: int = 2024
+var month: int = 1  # 1-12
 var companies: Dictionary = {}
-var simulation_speed: float = 1.0  # Years per second
+var simulation_speed: float = 1.0  # Steps per second
 var is_simulation_running: bool = false
+var simulation_timer: Timer
 
 func _ready():
 	initialize_world()
 	initialize_companies()
+	# Update all companies after initialization to ensure proper capability calculation
+	update_all_company_capabilities()
 	setup_simulation_timer()
 
 func initialize_world():
@@ -177,10 +182,10 @@ func initialize_companies():
 	companies["sakana_ai"].set_capability_focus(Company.CapabilityAxis.ALIGNMENT, 1.6)
 	companies["sakana_ai"].set_gpu_growth_rate(1.3)
 	
-	companies["bloomberg_ai"] = Company.new("Bloomberg AI", "USA", "new_york", 3000, 2024)
+	companies["bloomberg_ai"] = Company.new("Bloomberg AI", "USA", "new_york", 5000, 2024)
 	companies["bloomberg_ai"].set_capability_focus(Company.CapabilityAxis.CODING, 1.7)
 	companies["bloomberg_ai"].set_capability_focus(Company.CapabilityAxis.RESEARCH, 1.4)
-	companies["bloomberg_ai"].set_gpu_growth_rate(1.5)
+	companies["bloomberg_ai"].set_gpu_growth_rate(1.6)
 	
 	companies["goldman_sachs_ai"] = Company.new("Goldman Sachs AI", "USA", "new_york", 2500, 2024)
 	companies["goldman_sachs_ai"].set_capability_focus(Company.CapabilityAxis.CODING, 1.6)
@@ -197,29 +202,45 @@ func initialize_companies():
 	companies["singapore_gov_ai"].set_capability_focus(Company.CapabilityAxis.RESEARCH, 1.5)
 	companies["singapore_gov_ai"].set_gpu_growth_rate(1.3)
 
+func update_all_company_capabilities():
+	# Ensure all companies have their capabilities properly calculated
+	for company_id in companies:
+		var company = companies[company_id]
+		company.update_capabilities()
+
 func setup_simulation_timer():
-	var timer = Timer.new()
-	timer.wait_time = 1.0 / simulation_speed
-	timer.timeout.connect(_on_simulation_tick)
-	timer.autostart = false
-	add_child(timer)
+	simulation_timer = Timer.new()
+	simulation_timer.wait_time = 1.0 / simulation_speed  # Steps per second
+	simulation_timer.timeout.connect(_on_simulation_tick)
+	simulation_timer.autostart = false
+	add_child(simulation_timer)
 
 func start_simulation():
 	is_simulation_running = true
-	get_node("Timer").start()
+	simulation_timer.start()
 
 func stop_simulation():
 	is_simulation_running = false
-	get_node("Timer").stop()
+	simulation_timer.stop()
 
 func _on_simulation_tick():
 	if is_simulation_running:
-		advance_year()
+		advance_month()
+
+func advance_month():
+	month += 1
+	if month > 12:
+		month = 1
+		year += 1
+		year_changed.emit(year)
+	
+	month_changed.emit(year, month)
+	update_world()
 
 func advance_year():
-	year += 1
-	year_changed.emit(year)
-	update_world()
+	# Keep this for step button compatibility
+	for i in range(12):
+		advance_month()
 
 func update_world():
 	# Update all company capabilities based on time progression
@@ -231,24 +252,23 @@ func update_world():
 	simulate_ai_progress()
 
 func simulate_ai_progress():
-	# Simulate the exponential growth described in AI 2027
-	# Each year, companies invest more in GPUs and capabilities
-	
+	# Simulate monthly AI progress with smaller increments
 	for company_id in companies:
 		var company = companies[company_id]
 		
-		# Add GPUs based on company's growth rate and current capabilities
-		var years_elapsed = year - company.founded_year
-		var growth_multiplier = pow(1.2, years_elapsed)  # 20% growth per year
-		var new_gpus = int(company.gpu_count * 0.1 * growth_multiplier)
+		# Add GPUs based on company's growth rate (monthly)
+		var months_elapsed = (year - company.founded_year) * 12 + (month - 1)
+		var monthly_growth_rate = pow(company.gpu_growth_rate, 1.0/12.0)  # Convert annual to monthly
+		var growth_multiplier = pow(monthly_growth_rate, months_elapsed)
+		var new_gpus = int(company.gpu_count * 0.01 * growth_multiplier)  # 1% monthly growth
 		
 		if new_gpus > 0:
 			company.add_gpus(new_gpus)
 		
-		# Capability breakthroughs happen randomly but more likely for leading companies
-		if randf() < 0.1:  # 10% chance per year
+		# Capability breakthroughs happen less frequently (monthly chance)
+		if randf() < 0.01:  # 1% chance per month
 			var breakthrough_axis = randi() % 4
-			var breakthrough_amount = company.get_capability(breakthrough_axis) * 0.2
+			var breakthrough_amount = company.get_capability(breakthrough_axis) * 0.05  # Smaller monthly breakthroughs
 			company.capabilities[breakthrough_axis] += breakthrough_amount
 
 func get_company_data(company_id: String) -> Company:
@@ -270,4 +290,4 @@ func get_leading_companies() -> Array[Company]:
 		sorted_companies.append(companies[company_id])
 	
 	sorted_companies.sort_custom(func(a, b): return a.get_total_capability() > b.get_total_capability())
-	return sorted_companies.slice(0, 5)  # Top 5 companies
+	return sorted_companies.slice(0, 10)  # Top 10 companies
